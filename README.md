@@ -1,5 +1,5 @@
 # UpMyFee
-Python script for up unconfirmed Bitcoin transaction fee.
+Script for change Bitcoin transaction fee (only unconfirmed).
 
 Sometimes transactions in Bitcoin are confirmed for a very long time.
 This is usually due to network congestion and / or low commission.
