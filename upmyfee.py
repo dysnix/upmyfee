@@ -1,15 +1,4 @@
 #!/usr/bin/env python
-"""
-Tools for up unconfirmed Bitcoin transaction
-
-Application use Bitcoin RPC for:
-* get and decode raw transaction
-* get vin transactions for create new tx
-* change one tx vout amount for extend fee
-* create and sign new raw transaction
-* send edited transaction to Bitcoin Blockchain
-"""
-
 import argparse
 from decimal import Decimal
 from pprint import pprint
@@ -27,7 +16,7 @@ class UpMyFee():
     def get_tx_amount(self, txid):
         return self.api.gettransaction(txid)['amount']
 
-    def get_new_tx(self, orig_tx, payer, fee):
+    def get_new_tx(self, orig_tx, payer, to, fee):
         new_amount = 0
         orig_amount = 0
 
@@ -65,17 +54,19 @@ class UpMyFee():
                 orig_amount = amount
                 amount -= fee_diff
                 new_amount = amount
-
-            new_vouts[addr] = amount
+                new_vouts[to] = new_amount
+            else:
+                new_vouts[addr] = amount
 
         if new_amount <= Decimal(0):
             raise BaseException('New fee is very big!')
 
         return orig_vins, new_vouts, orig_fee, fee_diff, orig_amount, new_amount
 
-    def get_user_confirm(self, payer, txid, fee, orig_fee, fee_diff, orig_amount, new_amount):
+    def get_user_confirm(self, payer, to, txid, fee, orig_fee, fee_diff, orig_amount, new_amount):
         print("Transaction ID:\t%s" % txid)
         print("Payer address:\t%s" % payer)
+        print("New recipient:\t%s" % to)
         print("Orig fee:\t%s" % orig_fee)
         print("New fee:\t%s" % fee)
         print("Diff fee:\t%s" % fee_diff)
@@ -89,11 +80,11 @@ class UpMyFee():
 
         return True
 
-    def change_fee(self, payer, txid, fee, debug):
+    def change_fee(self, payer, to, txid, fee, debug):
         orig_rawtx = self.api.getrawtransaction(txid)
         orig_tx = self.api.decoderawtransaction(orig_rawtx)
 
-        vin, vout, orig_fee, fee_diff, orig_amount, new_amount = self.get_new_tx(orig_tx, payer, fee)
+        vin, vout, orig_fee, fee_diff, orig_amount, new_amount = self.get_new_tx(orig_tx, payer, to, fee)
 
         new_rawtx = self.api.createrawtransaction(vin, vout)
         new_tx = self.api.decoderawtransaction(new_rawtx)
@@ -101,7 +92,7 @@ class UpMyFee():
         if debug:
             pprint(new_tx)
 
-        if not self.get_user_confirm(payer, txid, fee, orig_fee, fee_diff, orig_amount, new_amount):
+        if not self.get_user_confirm(payer, to, txid, fee, orig_fee, fee_diff, orig_amount, new_amount):
             return False
 
         passphrase = input("Please enter the wallet passphrase: ")
@@ -118,7 +109,11 @@ class UpMyFee():
         if debug:
             pprint(tx_signed)
 
-        user_result = input("Send transaction to Blockchain? (yes/no): ")
+        print('HEX of signed transaction: ')
+        print(print(tx_signed_hex))
+        print('You can decode and broadcast transaction use https://blockchain.info/pushtx')
+
+        user_result = input("Broadcast transaction using your Bitcoin node? (yes/no): ")
         if user_result != "yes":
             print('Exit.')
             return False
@@ -131,6 +126,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Up bitcoin transaction tools')
     parser.add_argument('--rpc-url', help='Bitcoin-RPC URL', required=True)
     parser.add_argument('--payer', help='Payer Bitcoin address', required=True)
+    parser.add_argument('--to', help='New transaction recipient', required=True)
     parser.add_argument('--txid', help='ID of Bitcoin Transaction without confirmation', required=True)
     parser.add_argument('--fee', help='New fee', required=True)
     parser.add_argument('--debug', help='Debug mode', default=False, type=bool)
@@ -139,6 +135,7 @@ if __name__ == '__main__':
 
     service_url = args.rpc_url
     payer = args.payer
+    to = args.to
     txid = args.txid
     debug = args.debug
 
@@ -148,4 +145,4 @@ if __name__ == '__main__':
         raise argparse.ArgumentTypeError('Fee most be decimal type')
 
     upmyfee = UpMyFee(service_url, UNLOCK_TIMEOUT)
-    upmyfee.change_fee(payer, txid, fee, debug)
+    upmyfee.change_fee(payer, to, txid, fee, debug)
